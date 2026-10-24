@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>x = x² + m</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    input, select, button { font: inherit; }
+    #about { color: #666; }
+    li { margin: 8px 0; }
+    .mono { font-family: ui-monospace, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <h1>x = x² + m</h1>
+
+  <p><label>Шаг <select id="step"></select></label></p>
+  <p id="about"></p>
+  <p>
+    <label>m <input id="m" type="text" inputmode="numeric" size="42"></label>
+    <button id="random">Случайное</button>
+    <button id="run">Посчитать</button>
+  </p>
+
+  <ol>
+    <li>hash(m) = <span id="h" class="mono"></span></li>
+    <li>
+      invert(h) = <span id="found" class="mono"></span><br>
+      <progress id="bar" max="1" value="0"></progress> <span id="pct"></span>
+    </li>
+    <li>hash(invert(h)) = <span id="h2" class="mono"></span> <span id="check"></span></li>
+  </ol>
+
+  <script type="module" src="src/page.ts"></script>
+</body>
+</html>
