@@ -1,5 +1,5 @@
-// Локальный сервер для index.html: node server.ts → http://localhost:8000
-// Браузер не понимает TypeScript, поэтому из .ts-файлов на лету убираем типы (встроено в Node).
+// Local server for index.html: node server.ts → http://localhost:8000
+// Browsers don't understand TypeScript, so types are stripped from .ts files on the fly (built into Node).
 
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";

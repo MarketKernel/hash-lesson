@@ -1,30 +1,30 @@
-// Многочлены по модулю простого P и поиск корня — общий алгоритм обращения для шагов 2–25.
+// Polynomials modulo a prime P and root finding — the shared inversion algorithm for steps 2–25.
 //
-// Многочлен — массив коэффициентов от младшего к старшему: [c₀, c₁, c₂] = c₀ + c₁·m + c₂·m².
+// A polynomial is an array of coefficients from lowest to highest: [c₀, c₁, c₂] = c₀ + c₁·m + c₂·m².
 //
-// Как найти корень f (алгоритм Кантора–Цассенхауса). Держится на малой теореме Ферма: m^P = m для любого m.
-//   1. НОД(f, m^P − m) — многочлен, корни которого ровно корни f среди чисел 0 … P−1.
-//      Сам m^P не строим — только остаток от деления на f (через возведение в квадрат).
-//   2. Его делим на части. У половины ненулевых чисел a^((P−1)/2) = 1, у другой половины −1.
-//      НОД(g, (m + r)^((P−1)/2) − 1) со случайным r забирает примерно половину корней.
-//      Берём любую часть и повторяем, пока не останется многочлен вида (m − корень).
+// How to find a root of f (the Cantor–Zassenhaus algorithm). It rests on Fermat's little theorem: m^P = m for every m.
+//   1. GCD(f, m^P − m) is a polynomial whose roots are exactly the roots of f among the numbers 0 … P−1.
+//      m^P itself is never built — only its remainder modulo f (by repeated squaring).
+//   2. Split it into parts. Half of the nonzero numbers have a^((P−1)/2) = 1, the other half −1.
+//      GCD(g, (m + r)^((P−1)/2) − 1) with a random r takes about half of the roots.
+//      Take either part and repeat until a polynomial of the form (m − root) is left.
 //
-// Почти всё время уходит в шаг 1: ~2·log P умножений многочленов степени deg f и столько же делений,
-// потом НОД двух многочленов степени deg f. «В столбик» всё это стоит (deg f)². Здесь всё быстрое:
-//   - умножение — подстановкой Кронекера: многочлен упаковываем в одно огромное число (по 64 бита
-//     на коэффициент), числа умножает встроенный BigInt — у него внутри быстрое умножение;
-//   - остаток от деления на f — через «обратный» к f, посчитанный один раз методом Ньютона;
-//   - НОД — через half-GCD (см. hgcd ниже).
-// Итого ~deg f · log² (deg f) вместо (deg f)².
+// Almost all the time goes into step 1: ~2·log P multiplications of polynomials of degree deg f and as many divisions,
+// then the GCD of two polynomials of degree deg f. Done schoolbook-style, all of this costs (deg f)². Here everything is fast:
+//   - multiplication — by Kronecker substitution: pack the polynomial into one huge number (64 bits
+//     per coefficient); the numbers are multiplied by the built-in BigInt, which uses fast multiplication inside;
+//   - remainder modulo f — via an "inverse" of f, computed once by Newton's method;
+//   - GCD — via half-GCD (see hgcd below).
+// Total: ~deg f · log² (deg f) instead of (deg f)².
 
 export function polynomials(P: number) {
-  // --- Числа по модулю P ---------------------------------------------------
-  // Все числа < P < 2²⁶, поэтому произведения < 2⁵² — обычные числа JS считают их точно.
-  // (Кроме умножения многочленов — там BigInt, см. mul.)
+  // --- Numbers modulo P ----------------------------------------------------
+  // All numbers are < P < 2²⁶, so products are < 2⁵² — plain JS numbers compute them exactly.
+  // (Except polynomial multiplication — that uses BigInt, see mul.)
 
   const mod = (a: number): number => ((a % P) + P) % P;
 
-  /** a · b по модулю P без медленного %: частное оцениваем умножением на 1/P и поправляем на ±1. */
+  /** a · b modulo P without the slow %: estimate the quotient by multiplying by 1/P and correct it by ±1. */
   const invP = 1 / P;
   function mulMod(a: number, b: number): number {
     const t = a * b;
@@ -41,12 +41,12 @@ export function polynomials(P: number) {
     return r;
   }
 
-  /** 1/a по модулю P: по теореме Ферма a^(P−2) · a = a^(P−1) = 1. */
+  /** 1/a modulo P: by Fermat's theorem a^(P−2) · a = a^(P−1) = 1. */
   const inv = (a: number): number => powMod(a, P - 2);
 
-  // --- Простые операции ----------------------------------------------------
+  // --- Simple operations ---------------------------------------------------
 
-  /** Убирает нулевые старшие коэффициенты. У нулевого многочлена — пустой массив. */
+  /** Removes zero leading coefficients. The zero polynomial is an empty array. */
   function trim(a: number[]): number[] {
     let n = a.length;
     while (n > 0 && a[n - 1] === 0) n--;
@@ -65,7 +65,7 @@ export function polynomials(P: number) {
     return trim(Array.from({ length: n }, (_, i) => mod((a[i] ?? 0) - (b[i] ?? 0))));
   }
 
-  /** Умножение «в столбик»: (deg)² операций. */
+  /** Schoolbook multiplication: (deg)² operations. */
   function mulSlow(a: number[], b: number[]): number[] {
     const r = new Array(a.length + b.length - 1).fill(0);
     for (let i = 0; i < a.length; i++) {
@@ -79,43 +79,43 @@ export function polynomials(P: number) {
   }
 
   /**
-   * Умножение: короткие — в столбик, длинные — подстановкой Кронекера.
-   * Подставим вместо m число 2⁶⁴: многочлен станет числом, где каждый коэффициент занимает свои 64 бита
-   * (16 hex-цифр). Произведение чисел — это произведение многочленов: коэффициенты произведения
-   * меньше n·P² < 2⁶⁴ и не залезают друг на друга. Огромные числа быстро умножает встроенный BigInt.
+   * Multiplication: short ones schoolbook, long ones by Kronecker substitution.
+   * Substitute the number 2⁶⁴ for m: the polynomial becomes a number in which each coefficient takes its own 64 bits
+   * (16 hex digits). The product of the numbers is the product of the polynomials: the product's coefficients
+   * are below n·P² < 2⁶⁴ and don't overlap. The built-in BigInt multiplies huge numbers fast.
    */
   const TWO32 = 2 ** 32 % P;
   function mul(a: number[], b: number[]): number[] {
     if (!a.length || !b.length) return [];
     if (Math.min(a.length, b.length) < 32) return mulSlow(a, b);
-    if (Math.min(a.length, b.length) * (P - 1) ** 2 >= 2 ** 64) throw new Error("коэффициенты не влезут в 64 бита");
+    if (Math.min(a.length, b.length) * (P - 1) ** 2 >= 2 ** 64) throw new Error("coefficients won't fit in 64 bits");
     const pack = (p: number[]) => BigInt("0x" + p.map((c) => c.toString(16).padStart(16, "0")).reverse().join(""));
     const n = a.length + b.length - 1;
     const hex = (pack(a) * pack(b)).toString(16).padStart(16 * n, "0");
     const r = new Array(n);
     for (let i = 0; i < n; i++) {
-      const at = hex.length - 16 * (i + 1); // i-й коэффициент — i-я с конца группа из 16 hex-цифр
+      const at = hex.length - 16 * (i + 1); // coefficient i is the i-th group of 16 hex digits from the end
       const hi = parseInt(hex.slice(at, at + 8), 16) % P;
       const lo = parseInt(hex.slice(at + 8, at + 16), 16) % P;
-      const v = mulMod(hi, TWO32) + lo; // hi·2³² + lo по модулю P
+      const v = mulMod(hi, TWO32) + lo; // hi·2³² + lo modulo P
       r[i] = v >= P ? v - P : v;
     }
     return trim(r);
   }
 
-  /** Урезает по теореме Ферма: m^P = m, поэтому m^k при k ≥ P заменяем на m^(k−P+1). Корни те же. */
+  /** Reduces by Fermat's theorem: m^P = m, so m^k with k ≥ P is replaced by m^(k−P+1). The roots stay the same. */
   function fermat(f: number[]): number[] {
     if (f.length <= P) return f;
     const r = f.slice();
     for (let k = r.length - 1; k >= P; k--) {
-      // сверху вниз: если m^(k−P+1) снова не меньше P, его перенесём, когда дойдём до него
+      // top down: if m^(k−P+1) is again not below P, it gets moved when we reach it
       const s = r[k - P + 1] + r[k];
       r[k - P + 1] = s >= P ? s - P : s;
     }
     return trim(r.slice(0, P));
   }
 
-  /** Деление в столбик: a = q·b + остаток. Нужно для НОД, где делитель каждый раз новый. */
+  /** Long division: a = q·b + remainder. Needed for the GCD, where the divisor is new every time. */
   function divmod(a: number[], b: number[]): [number[], number[]] {
     const r = a.slice();
     const q = new Array(Math.max(0, a.length - b.length + 1)).fill(0);
@@ -129,10 +129,10 @@ export function polynomials(P: number) {
   }
 
   /**
-   * Быстрый остаток от деления на фиксированный f. Приём: «переворачиваем» многочлены (rev),
-   * тогда частное — это начало ряда rev(a) / rev(f). Ряд 1 / rev(f) считаем один раз методом Ньютона:
-   * g ← g·(2 − rev(f)·g), и каждый раз число верных коэффициентов удваивается.
-   * Дальше каждый остаток — два умножения.
+   * Fast remainder modulo a fixed f. The trick: "reverse" the polynomials (rev),
+   * then the quotient is the beginning of the series rev(a) / rev(f). The series 1 / rev(f) is computed once by Newton's method:
+   * g ← g·(2 − rev(f)·g), and each time the number of correct coefficients doubles.
+   * After that, every remainder costs two multiplications.
    */
   function reducer(f: number[]): (a: number[]) => number[] {
     const d = deg(f);
@@ -145,14 +145,14 @@ export function polynomials(P: number) {
     }
     return (a) => {
       if (a.length <= d) return a;
-      const n = a.length - d; // столько коэффициентов у частного
+      const n = a.length - d; // the quotient has this many coefficients
       const rq = mul(a.slice().reverse().slice(0, n), g.slice(0, n)).slice(0, n);
       const q = rq.concat(new Array(n - rq.length).fill(0)).reverse();
       return trim(sub(a, mul(q, f)).slice(0, d));
     };
   }
 
-  /** base^e по модулю f — через возведение в квадрат. progress получает долю пройденных бит e. */
+  /** base^e modulo f — by repeated squaring. progress receives the fraction of the bits of e done. */
   function powPoly(base: number[], e: number, f: number[], progress?: (done: number) => void): number[] {
     const rem = reducer(f);
     const bits = Math.floor(Math.log2(e)) + 1;
@@ -166,23 +166,23 @@ export function polynomials(P: number) {
     return r;
   }
 
-  /** Старший коэффициент — 1. */
+  /** Makes the leading coefficient 1. */
   function monic(a: number[]): number[] {
     const lead = inv(a[deg(a)]);
     return a.map((c) => (c * lead) % P);
   }
 
-  /** НОД «в столбик» (алгоритм Евклида): ~(deg)² операций. */
+  /** Schoolbook GCD (Euclid's algorithm): ~(deg)² operations. */
   function gcdSlow(a: number[], b: number[]): number[] {
     while (b.length) [a, b] = [b, divmod(a, b)[1]];
     return monic(a);
   }
 
-  // --- Быстрый НОД (half-GCD) ----------------------------------------------
-  // Шаг Евклида (a, b) → (b, a − q·b) — это умножение пары на матрицу [[0, 1], [1, −q]].
-  // Первые шаги Евклида зависят только от старших коэффициентов a и b. Поэтому hgcd рекурсивно
-  // решает задачу для старших половин и возвращает матрицу, которая делает сразу все эти шаги:
-  // степень уменьшается вдвое за ~deg · log deg операций. Весь НОД — ~deg · log² deg вместо deg².
+  // --- Fast GCD (half-GCD) -------------------------------------------------
+  // A Euclid step (a, b) → (b, a − q·b) is multiplying the pair by the matrix [[0, 1], [1, −q]].
+  // The first Euclid steps depend only on the leading coefficients of a and b. So hgcd recursively
+  // solves the problem for the upper halves and returns a matrix that does all those steps at once:
+  // the degree is halved in ~deg · log deg operations. The whole GCD is ~deg · log² deg instead of deg².
 
   type Matrix = [number[], number[], number[], number[]]; // [[m₀, m₁], [m₂, m₃]]
   const I: Matrix = [[1], [], [], [1]];
@@ -202,7 +202,7 @@ export function polynomials(P: number) {
     ];
   }
 
-  /** То же, что hgcd, но шагами Евклида по одному — для коротких многочленов это быстрее рекурсии. */
+  /** Same as hgcd, but one Euclid step at a time — for short polynomials this is faster than recursion. */
   function hgcdSlow(a: number[], b: number[]): Matrix {
     const m = Math.ceil(deg(a) / 2);
     let M = I;
@@ -215,35 +215,35 @@ export function polynomials(P: number) {
   }
 
   /**
-   * Матрица M, после которой M · (a, b) = (c, d) и deg d < ⌈deg a / 2⌉ ≤ deg c. Нужно deg a > deg b.
-   * progress — доля сделанного: каждый из двух рекурсивных вызовов — примерно 45% времени.
+   * The matrix M such that M · (a, b) = (c, d) and deg d < ⌈deg a / 2⌉ ≤ deg c. Requires deg a > deg b.
+   * progress — the fraction done: each of the two recursive calls takes about 45% of the time.
    */
   function hgcd(a: number[], b: number[], progress?: (done: number) => void): Matrix {
     if (a.length < 64) return hgcdSlow(a, b);
     const m = Math.ceil(deg(a) / 2);
     if (deg(b) < m) return I;
     const part = (from: number) => progress && ((done: number) => progress(from + 0.45 * done));
-    const R = hgcd(a.slice(m), b.slice(m), part(0)); // старшие половины
+    const R = hgcd(a.slice(m), b.slice(m), part(0)); // upper halves
     const [c, d] = apply(R, a, b);
     if (deg(d) < m) return R;
-    const [q, e] = divmod(c, d); //                      один шаг Евклида вручную
+    const [q, e] = divmod(c, d); //                      one Euclid step by hand
     const k = 2 * m - deg(d);
-    const S = hgcd(d.slice(k), e.slice(k), part(0.5)); // и ещё раз — для старших частей нового остатка
+    const S = hgcd(d.slice(k), e.slice(k), part(0.5)); // and once more — for the upper parts of the new remainder
     const M = times(S, times([[], [1], [1], sub([], q)], R));
     progress?.(1);
     return M;
   }
 
   /**
-   * НОД многочленов со старшим коэффициентом 1. Короткие — Евклидом, длинные — через hgcd.
-   * progress — какая доля степени уже «съедена»: каждый hgcd съедает примерно половину оставшейся.
+   * GCD of polynomials, with leading coefficient 1. Short ones by Euclid, long ones via hgcd.
+   * progress — what fraction of the degree is already "eaten": each hgcd eats about half of what is left.
    */
   function gcd(a: number[], b: number[], progress?: (done: number) => void): number[] {
     if (deg(a) < deg(b)) [a, b] = [b, a];
     const start = deg(a);
     const eaten = () => 1 - Math.max(deg(b), 0) / start;
     while (b.length) {
-      [a, b] = [b, divmod(a, b)[1]]; // шаг Евклида: теперь deg a > deg b — это нужно hgcd
+      [a, b] = [b, divmod(a, b)[1]]; // Euclid step: now deg a > deg b — hgcd needs this
       if (b.length && a.length > 256) {
         const from = eaten();
         [a, b] = apply(hgcd(a, b, progress && ((done) => progress(from + ((1 - from) / 2) * done))), a, b);
@@ -253,9 +253,9 @@ export function polynomials(P: number) {
     return monic(a);
   }
 
-  /** Делим g случайными «пополам», пока не останется (m − корень). */
+  /** Splits g into random "halves" until (m − root) is left. */
   function split(g: number[]): number | null {
-    if (g.length < 2) return null; // степень 0 — корней нет
+    if (g.length < 2) return null; // degree 0 — no roots
     if (g.length === 2) return mod(-g[0] * inv(g[1])); // g = g₁·m + g₀  →  m = −g₀ / g₁
     for (;;) {
       const r = Math.floor(Math.random() * P);
@@ -265,22 +265,22 @@ export function polynomials(P: number) {
   }
 
   /**
-   * Какой-нибудь корень f по модулю P (или null, если корней нет).
-   * progress (необязательно) получает долю сделанной работы от 0 до 1 — для показа процентов.
+   * Some root of f modulo P (or null if there are no roots).
+   * progress (optional) receives the fraction of work done, from 0 to 1 — for showing percentages.
    */
   function findRoot(f: number[], progress?: (done: number) => void): number | null {
     f = trim(f.map(mod));
-    const X = [0, 1]; // многочлен «m»
-    // Для процентов: m^P — примерно десятая часть работы, НОД — остальное.
-    // Сообщаем не чаще, чем раз в 0,1% — иначе сообщений будут десятки тысяч.
+    const X = [0, 1]; // the polynomial "m"
+    // For percentages: m^P is about a tenth of the work, the GCD is the rest.
+    // Report at most once per 0.1% — otherwise there would be tens of thousands of messages.
     let last = -1;
     const report = (done: number) => {
       if (done - last >= 0.001) progress?.((last = done));
     };
-    // Шаг 1: НОД(f, m^P − m).
+    // Step 1: GCD(f, m^P − m).
     const xp = powPoly(X, P, f, (done) => report(0.1 * done));
     const g = gcd(f, sub(xp, X), (done) => report(0.1 + 0.9 * done));
-    return split(g); // шаг 2: делим, пока не останется (m − корень)
+    return split(g); // step 2: split until (m − root) is left
   }
 
   return { add, mul, mulSlow, fermat, gcd, gcdSlow, findRoot };

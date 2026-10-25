@@ -1,4 +1,4 @@
-// Фоновый поток: считает хеш и обратное, пока страница остаётся живой и показывает прогресс.
+// Background thread: computes the hash and the inverse while the page stays responsive and shows progress.
 
 import * as step1 from "./step1.ts";
 import * as step2 from "./step2.ts";
@@ -6,7 +6,7 @@ import * as step17 from "./step17.ts";
 import * as step25 from "./step25.ts";
 import * as step128 from "./step128.ts";
 
-// Шаги 1–25 считают в обычных числах, шаг 128 — в BigInt.
+// Steps 1–25 use plain numbers, step 128 uses BigInt.
 type Step = {
   hash: (m: any) => any;
   invert: (h: any, progress?: (done: number) => void) => any;
@@ -25,7 +25,7 @@ onmessage = (e: MessageEvent<{ step: string; m: number | bigint }>) => {
   try {
     found = invert(h, (done) => postMessage({ type: "progress", done }));
   } catch (err) {
-    postMessage({ type: "error", message: (err as Error).message }); // например, шаг 128: «не досчитать»
+    postMessage({ type: "error", message: (err as Error).message }); // e.g. step 128: "infeasible"
     return;
   }
   const ms = performance.now() - t0;

@@ -1,201 +1,203 @@
-# Как из обратимых операций получается необратимая задача
+**English** · [Русский](README.ru.md)
 
-Хеш — шаг `x = x² + m`, повторённый несколько раз (всё по модулю простого `P = 786 433`, чуть меньше 2²⁰).
-Задача — по хешу найти какое-нибудь `m`. Шаги — отдельные файлы `src/stepN.ts` (N = число повторений).
-Общий алгоритм обращения (поиск корня многочлена) — `src/algebra.ts`.
+# How reversible operations add up to an irreversible problem
 
-| Шаг | Уравнение на m | Как решаем | Время |
+The hash is the step `x = x² + m`, repeated several times (everything modulo the prime `P = 786,433`, just below 2²⁰).
+The task: given a hash, find some `m`. Steps live in separate files `src/stepN.ts` (N = number of repetitions).
+The shared inversion algorithm (finding a root of a polynomial) is in `src/algebra.ts`.
+
+| Step | Equation in m | How we solve it | Time |
 | --- | --- | --- | --- |
-| 1 | 2-й степени | школьная формула | мгновенно |
-| 2 | 4-й степени | алгоритм `findRoot` | мгновенно |
-| 17 | степени 131 072 | тот же алгоритм | ~16 с |
-| 25 | степени 2²⁵ ≈ 33 млн → урезаем по Ферма до < P | тот же алгоритм | ~2 мин |
-| 128 | степени 2¹²⁸, **P — 16 байт** (см. ниже) | не досчитать | ~10²⁸ лет (оценка) |
+| 1 | degree 2 | school formula | instant |
+| 2 | degree 4 | the `findRoot` algorithm | instant |
+| 17 | degree 131,072 | the same algorithm | ~16 s |
+| 25 | degree 2²⁵ ≈ 33 million → reduced by Fermat to < P | the same algorithm | ~2 min |
+| 128 | degree 2¹²⁸, **P is 16 bytes** (see below) | infeasible | ~10²⁸ years (estimate) |
 
-## Как считаем: алгоритмы по шагам
+## How we compute: algorithms step by step
 
-**Шаг хеша 1** — квадратное уравнение `m² + m − h = 0`: школьная формула `m = (−1 + √D) / 2`.
-Квадратный корень по модулю `P` — **алгоритм Чиполлы** (`src/step1.ts`).
+**Hash step 1** — the quadratic equation `m² + m − h = 0`: the school formula `m = (−1 + √D) / 2`.
+Square root modulo `P` — **Cipolla's algorithm** (`src/step1.ts`).
 
-**Шаги хеша 2, 17, 25** — `invert(h)` ищет корень многочлена `f(m) − h` по модулю `P` (`src/algebra.ts`):
+**Hash steps 2, 17, 25** — `invert(h)` looks for a root of the polynomial `f(m) − h` modulo `P` (`src/algebra.ts`):
 
-1. **Построить многочлен.** Те же шаги, что в `hash`, только над многочленом: `f = f² + m`.
-   - умножение многочленов — **подстановка Кронекера**: многочлен → огромное число (64 бита на
-     коэффициент) → умножение **BigInt** (внутри у него быстрое умножение) → обратно в коэффициенты;
-   - если степень дошла до `P` — **урезание по малой теореме Ферма**: `m^P = m`, значит `m^k` при `k ≥ P`
-     заменяем на `m^(k−P+1)`. Значения многочлена не меняются — и корни тоже.
-2. **Возвести `m` в степень `P` по модулю `f`** — **бинарное возведение в степень** (через квадраты, ~log₂ P ≈ 20 раз).
-   Остаток от деления на `f` — **деление через обратный ряд по Ньютону** (приём Барретта для многочленов):
-   обратный к «перевёрнутому» `f` считается один раз, дальше каждое деление — два умножения.
-3. **`НОД(f, m^P − m)`** — у `m^P − m` корни все числа `0 … P−1`, поэтому НОД оставляет ровно те корни `f`,
-   которые действительно существуют. **Алгоритм Евклида**, ускоренный **half-GCD** (Кнут–Шёнхаге):
-   первые шаги Евклида зависят только от старших коэффициентов, поэтому их делают рекурсией
-   по старшим половинам — много шагов одной матрицей.
-4. **Разделить корни** — **разделение Кантора–Цассенхауса**: `НОД(g, (m + r)^((P−1)/2) − 1)` со случайным `r`
-   забирает примерно половину корней (у половины чисел `a^((P−1)/2) = 1` — **критерий Эйлера**).
-   Повторяем, пока не останется один корень.
+1. **Build the polynomial.** The same steps as in `hash`, only over a polynomial: `f = f² + m`.
+   - polynomial multiplication — **Kronecker substitution**: polynomial → huge number (64 bits per
+     coefficient) → **BigInt** multiplication (it uses fast multiplication internally) → back to coefficients;
+   - once the degree reaches `P` — **reduction by Fermat's little theorem**: `m^P = m`, so `m^k` with `k ≥ P`
+     is replaced by `m^(k−P+1)`. The polynomial's values don't change — and neither do its roots.
+2. **Raise `m` to the power `P` modulo `f`** — **binary exponentiation** (by squaring, ~log₂ P ≈ 20 times).
+   Remainder modulo `f` — **division via a Newton inverse series** (Barrett's trick for polynomials):
+   the inverse of the "reversed" `f` is computed once, after that each division is two multiplications.
+3. **`GCD(f, m^P − m)`** — the roots of `m^P − m` are all the numbers `0 … P−1`, so the GCD keeps exactly those roots of `f`
+   that actually exist. **Euclid's algorithm**, sped up by **half-GCD** (Knuth–Schönhage):
+   the first Euclid steps depend only on the leading coefficients, so they are done by recursion
+   on the upper halves — many steps in one matrix.
+4. **Split the roots** — **Cantor–Zassenhaus splitting**: `GCD(g, (m + r)^((P−1)/2) − 1)` with a random `r`
+   takes about half of the roots (half of the numbers have `a^((P−1)/2) = 1` — **Euler's criterion**).
+   Repeat until a single root is left.
 
-Шаги 2–4 вместе — **алгоритм Кантора–Цассенхауса** поиска корней многочлена над конечным полем.
-Каждая часть стоит ~`степень · log(степени)` или ~`степень · log²(степени)` операций (без быстрых алгоритмов было бы
-~`степень²`).
+Steps 2–4 together are the **Cantor–Zassenhaus algorithm** for finding roots of a polynomial over a finite field.
+Each part costs ~`degree · log(degree)` or ~`degree · log²(degree)` operations (without the fast algorithms it would be
+~`degree²`).
 
-## Почему так растёт
+## Why it grows like this
 
-Каждый шаг удваивает степень уравнения. Алгоритм стоит ~`степень · log²(степени)`:
-умножение многочленов — подстановкой Кронекера через BigInt, деление — через обратный по Ньютону,
-НОД — через half-GCD. Поэтому время растёт примерно вдвое за шаг.
+Each step doubles the degree of the equation. The algorithm costs ~`degree · log²(degree)`:
+polynomial multiplication — by Kronecker substitution via BigInt, division — via the Newton inverse,
+GCD — via half-GCD. So the time roughly doubles per step.
 
-Замер (Node):
+Measured (Node):
 
-| Шаг | Степень | Время |
+| Step | Degree | Time |
 | --- | --- | --- |
-| 17 | 131 072 | 16 с |
-| 20 | 786 432 (2²⁰, урезано по Ферма) | 113 с |
-| 25 | 786 432 (2²⁵, урезано по Ферма) | 121 с |
+| 17 | 131,072 | 16 s |
+| 20 | 786,432 (2²⁰, reduced by Fermat) | 113 s |
+| 25 | 786,432 (2²⁵, reduced by Fermat) | 121 s |
 
-С шага 20 степень `2ʳ` больше `P`. По теореме Ферма `m^P = m`, поэтому многочлен урезается до степени
-меньше `P` — и дальше время почти не растёт: оно упирается в `P`. Меньше урезать нельзя — в многочлене
-~`P` слагаемых. Поэтому цена — ~`P · log² P`, сколько шагов ни делай.
+From step 20 on, the degree `2ʳ` is larger than `P`. By Fermat's theorem `m^P = m`, so the polynomial is reduced to
+a degree below `P` — and from there the time barely grows: it hits the ceiling of `P`. It can't be reduced further — the
+polynomial has ~`P` terms. So the cost is ~`P · log² P`, no matter how many steps.
 
-При `P ≈ 2²⁰` это минуты. При `P ≈ 2²⁵⁶` — ~2²⁵⁶ операций: столько не сделать никогда.
+With `P ≈ 2²⁰` that's minutes. With `P ≈ 2²⁵⁶` it's ~2²⁵⁶ operations: that can never be done.
 
-## Куда уходит время и память (шаг 25, замер)
+## Where the time and memory go (step 25, measured)
 
-| Часть | Алгоритм | Время | Доля | Пик памяти процесса |
+| Part | Algorithm | Time | Share | Peak process memory |
 | --- | --- | --- | --- | --- |
-| 1. построить многочлен (24 раза `f = f² + m`) | Кронекер + урезание по Ферма | 7,6 с | 6% | ~850 МБ |
-| 2. `m^P mod f` | бинарное возведение + деление по Ньютону | 6,3 с | 5% | ~830 МБ |
-| 3. `НОД(f, m^P − m)` | half-GCD | 106 с | **88%** | ~910 МБ |
-| 4. разделить корни | Кантор–Цассенхаус | < 0,1 с | 0% | — |
-| **всего** | | **120 с** | | **~1 ГБ** |
+| 1. build the polynomial (24 times `f = f² + m`) | Kronecker + Fermat reduction | 7.6 s | 6% | ~850 MB |
+| 2. `m^P mod f` | binary exponentiation + Newton division | 6.3 s | 5% | ~830 MB |
+| 3. `GCD(f, m^P − m)` | half-GCD | 106 s | **88%** | ~910 MB |
+| 4. split the roots | Cantor–Zassenhaus | < 0.1 s | 0% | — |
+| **total** | | **120 s** | | **~1 GB** |
 
-Почему НОД — самое дорогое: возведение в степень — это ~70 умножений многочленов (20 возведений в квадрат,
-каждое со своим делением по Ньютону — ещё два умножения), а half-GCD на каждом из ~20 уровней рекурсии
-перемножает матрицы многочленов 2×2 — по 8 умножений на каждое произведение матриц.
+Why the GCD is the most expensive part: exponentiation is ~70 polynomial multiplications (20 squarings,
+each with its own Newton division — two more multiplications), while half-GCD, on each of its ~20 recursion levels,
+multiplies 2×2 matrices of polynomials — 8 multiplications per matrix product.
 
-Внутри всех частей почти всё время — умножение многочленов (~90% по профилю).
-Одно умножение многочленов длины ~786 тысяч — около 1 с:
+Inside every part, nearly all the time is polynomial multiplication (~90% by the profile).
+One multiplication of polynomials of length ~786 thousand takes about 1 s:
 
-| Внутри умножения | Доля |
+| Inside a multiplication | Share |
 | --- | --- |
-| умножение огромных чисел BigInt (~50 млн бит) | ~50% |
-| упаковка коэффициентов в число (hex-строка → BigInt) | ~25% |
-| распаковка результата обратно в коэффициенты | ~25% |
+| multiplying huge BigInt numbers (~50 million bits) | ~50% |
+| packing coefficients into a number (hex string → BigInt) | ~25% |
+| unpacking the result back into coefficients | ~25% |
 
-**Память.** Сам многочлен — 786 тысяч чисел, ~6 МБ. Но при каждом умножении он превращается в строку
-из 12,6 млн hex-цифр и BigInt на 50 млн бит; большая часть пика — такие временные строки и числа,
-которые сборщик мусора ещё не убрал. Поэтому пик почти одинаковый во всех тяжёлых частях
-(и на шагах 25 и 50). Растёт пропорционально `P`. До начала вычислений процесс занимает ~50 МБ.
+**Memory.** The polynomial itself is 786 thousand numbers, ~6 MB. But on every multiplication it turns into a string
+of 12.6 million hex digits and a 50-million-bit BigInt; most of the peak is such temporary strings and numbers
+that the garbage collector hasn't cleaned up yet. That's why the peak is nearly the same in all heavy parts
+(and at steps 25 and 50). It grows in proportion to `P`. Before the computation starts, the process takes ~50 MB.
 
-## Предел
+## The limit
 
-**Число шагов само по себе предела не даёт.** С шага 20 степень урезается по Ферма до меньше `P`,
-и каждый следующий шаг добавляет только одно возведение в квадрат — около 1 с:
+**The number of steps by itself sets no limit.** From step 20 on, the degree is reduced by Fermat to below `P`,
+and each further step adds just one squaring — about 1 s:
 
-| Шагов (наш P) | Время |
+| Steps (our P) | Time |
 | --- | --- |
-| 25 | 2 мин (замер) |
-| 50 | 2,4 мин (замер) |
-| 1000 | ~19 мин (оценка) |
+| 25 | 2 min (measured) |
+| 50 | 2.4 min (measured) |
+| 1000 | ~19 min (estimate) |
 
-**Предел задаёт размер P.** Цена ~`P · log² P`, память ~`P`, а чтобы степень догнала `P`, нужно
-не меньше `log₂ P` шагов. Оценка — пересчёт замера при `P ≈ 2²⁰`, тот же компьютер, Node:
+**The limit is set by the size of P.** The cost is ~`P · log² P`, memory ~`P`, and for the degree to catch up with `P`
+you need at least `log₂ P` steps. The estimate is the measurement at `P ≈ 2²⁰` scaled up, same computer, Node:
 
-| P | Шагов, чтобы степень догнала P | Время | Память |
+| P | Steps for the degree to reach P | Time | Memory |
 | --- | --- | --- | --- |
-| 2²⁰ (наш) | 20 | 2–3 мин | ~1 ГБ |
-| 2²⁴ | 24 | ~1 ч | ~20 ГБ |
-| 2²⁵ | 25 | ~2,3 ч | ~40 ГБ |
-| 2³⁰ | 30 | ~4 дня | ~1 ТБ |
-| 2⁴⁰ | 40 | ~20 лет | ~1 ПБ |
-| 2⁶⁴ | 64 | ~10⁸ лет | ~10¹⁰ ТБ |
-| 2¹²⁸ | 128 | ~10²⁸ лет | ~10²⁹ ТБ |
-| 2²⁵⁶ | 256 | ~10⁶⁷ лет | ~10⁶⁸ ТБ |
+| 2²⁰ (ours) | 20 | 2–3 min | ~1 GB |
+| 2²⁴ | 24 | ~1 h | ~20 GB |
+| 2²⁵ | 25 | ~2.3 h | ~40 GB |
+| 2³⁰ | 30 | ~4 days | ~1 TB |
+| 2⁴⁰ | 40 | ~20 years | ~1 PB |
+| 2⁶⁴ | 64 | ~10⁸ years | ~10¹⁰ TB |
+| 2¹²⁸ | 128 | ~10²⁸ years | ~10²⁹ TB |
+| 2²⁵⁶ | 256 | ~10⁶⁷ years | ~10⁶⁸ TB |
 
-Ждать бессмысленно уже примерно с `P ≈ 2⁴⁰` и 40 шагов: десятки лет и петабайт памяти.
-При `P ≈ 2²⁵⁶` время больше возраста Вселенной (~10¹⁰ лет) в 10⁵⁷ раз.
+Waiting becomes pointless at roughly `P ≈ 2⁴⁰` and 40 steps: decades and petabytes of memory.
+At `P ≈ 2²⁵⁶` the time exceeds the age of the Universe (~10¹⁰ years) by a factor of 10⁵⁷.
 
-Всё, что больше `2²⁰`, — только оценка: наш код рассчитан на `P` до ~2²¹ (64 бита на коэффициент
-в умножении Кронекера, точность обычных чисел JS). Для большего `P` нужны BigInt-коэффициенты.
+Everything above `2²⁰` is only an estimate: our code is built for `P` up to ~2²¹ (64 bits per coefficient
+in Kronecker multiplication, the precision of plain JS numbers). A larger `P` needs BigInt coefficients.
 
-## Можно ли быстрее
+## Can it be faster?
 
-**Тот же алгоритм, но лучше написанный — да, в разы. Но закон не меняется.**
+**The same algorithm, better written — yes, several times over. But the law doesn't change.**
 
-- У нас JS: половина времени умножения уходит на упаковку в строки и обратно. Библиотеки на C
-  (FLINT, NTL) умножают многочлены через NTT по нескольким простым модулям, half-GCD у них вылизан,
-  плюс многопоточность — ожидаемо в десятки раз быстрее (оценка, не замер).
-- Это меняет только константу. Цена остаётся ~`P · log² P`: для `P ≈ 2²⁵⁶` по-прежнему невозможно.
+- We use JS: half of the multiplication time goes into packing to strings and back. C libraries
+  (FLINT, NTL) multiply polynomials via NTT over several prime moduli, their half-GCD is polished,
+  plus multithreading — expected to be tens of times faster (an estimate, not a measurement).
+- That changes only the constant. The cost stays ~`P · log² P`: for `P ≈ 2²⁵⁶` it is still impossible.
 
-**Асимптотически лучшие алгоритмы поиска корней есть, но выигрыш — только в логарифмах.**
-Теоретически ~`степень^(1+ε) · log P` (модульная композиция Кедлаи–Уманса); на практике такие алгоритмы
-медленнее нашего. Многочлен с ~`P` слагаемыми всё равно нужно хотя бы прочитать — это ~`P`.
+**Asymptotically better root-finding algorithms exist, but they win only in the logarithms.**
+In theory ~`degree^(1+ε) · log P` (Kedlaya–Umans modular composition); in practice such algorithms
+are slower than ours. A polynomial with ~`P` terms still has to be at least read — that's ~`P`.
 
-**Можно ли значительно быстрее — не ~`P`, а, скажем, ~`√P` или ~`log P`? Неизвестно.**
+**Can it be much faster — not ~`P` but, say, ~`√P` or ~`log P`? Unknown.**
 
-- Если смотреть на хеш как на «чёрный ящик» (умеем только вычислять), доказано: нужно ~`P` вычислений.
-  Квантовый компьютер (алгоритм Гровера) — ~`√P`; для `P ≈ 2²⁵⁶` это 2¹²⁸ — всё равно невозможно.
-- Наш хеш не чёрный ящик — его формула известна. Но способа использовать структуру «`x² + m`, повторённое
-  `r` раз» лучше, чем через многочлен с ~`P` слагаемыми, не известно.
-- Можно не подставлять шаги друг в друга, а решать систему уравнений с промежуточными неизвестными
-  `x₁ … xᵣ` (базисы Грёбнера) — но её сложность того же порядка: она тоже растёт как `2ʳ`.
-- Доказать, что быстрого способа нет, никто не умеет. Ровно так же и для SHA-256: его стойкость —
-  не доказанная теорема, а то, что за десятилетия никто не нашёл способа быстрее.
+- If you treat the hash as a "black box" (we can only evaluate it), it's proven that ~`P` evaluations are needed.
+  A quantum computer (Grover's algorithm) needs ~`√P`; for `P ≈ 2²⁵⁶` that's 2¹²⁸ — still impossible.
+- Our hash isn't a black box — its formula is known. But no way is known to exploit the structure "`x² + m`, repeated
+  `r` times" better than through a polynomial with ~`P` terms.
+- Instead of substituting the steps into each other, one can solve a system of equations with intermediate unknowns
+  `x₁ … xᵣ` (Gröbner bases) — but its complexity is of the same order: it also grows as `2ʳ`.
+- Nobody knows how to prove that no fast way exists. It's exactly the same for SHA-256: its security is
+  not a proven theorem, but the fact that over decades nobody has found a faster way.
 
-## Шаг 128: «настоящий» размер — и почему это всё равно не криптостойкий хеш
+## Step 128: a "real" size — and why it's still not a secure hash
 
-Особенный шаг: `P = 2¹²⁸ − 159` — наибольшее простое число в 16 байт, 128 шагов, всё в BigInt.
-Обратная здесь сразу сообщает «не досчитать»: уравнение степени 2¹²⁸, после урезания по Ферма —
-~`P` ≈ 3,4·10³⁸ слагаемых, работы ~`P · log² P` ≈ 2¹⁴² — ~10²⁸ лет.
+A special step: `P = 2¹²⁸ − 159` — the largest 16-byte prime, 128 steps, everything in BigInt.
+Here the inverse immediately reports "infeasible": an equation of degree 2¹²⁸, after Fermat reduction —
+~`P` ≈ 3.4·10³⁸ terms, work ~`P · log² P` ≈ 2¹⁴² — ~10²⁸ years.
 
-Найти прообраз — действительно ~2¹²⁸. Но криптостойким хешем это не делает:
+Finding a preimage really is ~2¹²⁸. But that doesn't make it a cryptographically secure hash:
 
-| Свойство | Здесь | Нужно |
+| Property | Here | Required |
 | --- | --- | --- |
-| найти прообраз | ~2¹²⁸ | ≥ 2¹²⁸ |
-| найти коллизию (два m с одним хешем) | ~2⁶⁴ — «парадокс дней рождения», без алгебры | ≥ 2¹²⁸ → выход 256 бит |
-| квантовый компьютер (Гровер) | ~2⁶⁴ | ≥ 2¹²⁸ |
-| запас раундов | нет: 128 — ровно граница, где степень догоняет P | раундов с запасом |
-| специальные атаки (интерполяция, Грёбнер, НОД) | не проверяли | годы публичного анализа |
-| вход любой длины | нет — одно число < P | схема сборки (губка, Меркл–Дамгор) |
+| find a preimage | ~2¹²⁸ | ≥ 2¹²⁸ |
+| find a collision (two m with the same hash) | ~2⁶⁴ — the "birthday paradox", no algebra | ≥ 2¹²⁸ → 256-bit output |
+| quantum computer (Grover) | ~2⁶⁴ | ≥ 2¹²⁸ |
+| round margin | none: 128 is exactly the point where the degree catches up with P | extra rounds as a margin |
+| special attacks (interpolation, Gröbner, GCD) | not checked | years of public analysis |
+| input of any length | no — a single number < P | a construction (sponge, Merkle–Damgård) |
 
-**Почему P простое.** Хеш можно считать по любому модулю `N`, но:
+**Why P is prime.** The hash could be computed modulo any `N`, but:
 
-- `N = 2¹²⁸` — катастрофа: младшие биты результата зависят только от младших битов `m`, и `m`
-  восстанавливается бит за битом (лемма Гензеля: производная нашего многочлена всегда нечётная).
-  Проверено при `2¹⁶`: 16 проверок вместо 65 536. При чётном числе шагов, как 128, хеш по модулю 2ᵏ
-  даже взаимно однозначен;
-- `N = p · q` с известными множителями — задача распадается на две по модулю `p` и `q`, стойкость — у меньшего;
-- `N = p · q` с секретными множителями — это уже другая трудность (разложение на множители, как у Рабина),
-  и кому-то нужно сгенерировать `N` и «забыть» `p`, `q`.
+- `N = 2¹²⁸` is a disaster: the low bits of the result depend only on the low bits of `m`, and `m`
+  is recovered bit by bit (Hensel's lemma: the derivative of our polynomial is always odd).
+  Checked at `2¹⁶`: 16 checks instead of 65,536. With an even number of steps, like 128, the hash modulo 2ᵏ
+  is even a bijection;
+- `N = p · q` with known factors — the problem splits into two, modulo `p` and modulo `q`; the security is that of the smaller one;
+- `N = p · q` with secret factors — that's a different hardness altogether (factoring, as in Rabin),
+  and someone has to generate `N` and "forget" `p`, `q`.
 
-С простым `P` всё сходится: теорема Ферма, критерий Эйлера и деление по модулю работают — и на них держится
-и алгоритм обращения, и наш анализ его цены.
+With a prime `P` everything fits: Fermat's theorem, Euler's criterion and division modulo `P` all work — and both
+the inversion algorithm and our analysis of its cost rest on them.
 
-## Страница
+## The page
 
 ```bash
 node server.ts
 ```
 
-Открыть <http://localhost:8000>: выбираем шаг и `m` → `hash(m)` → `invert(h)` с прогрессом,
-временем «прошло / осталось» → снова `hash` от найденного.
+Open <http://localhost:8000>: pick a step and `m` → `hash(m)` → `invert(h)` with progress
+and "elapsed / remaining" time → `hash` of the found value again.
 
-## Сборка
+## Build
 
 ```bash
 ./build.sh
 ```
 
-Собирает всё в один файл `dist/index.html` — он открывается двойным кликом, без сервера.
-Весь код вклеен в страницу, типы из .ts убраны, зависимостей нет.
+Bundles everything into a single file `dist/index.html` — it opens on double-click, no server needed.
+All the code is inlined into the page, types are stripped from the .ts files, there are no dependencies.
 
-При push в `main` то же самое делает GitHub Actions (`.github/workflows/pages.yml`):
-прогоняет тесты, собирает и выкладывает `dist/index.html` на GitHub Pages.
+On push to `main`, GitHub Actions (`.github/workflows/pages.yml`) does the same:
+runs the tests, builds, and publishes `dist/index.html` to GitHub Pages.
 
-## Тесты
+## Tests
 
 ```bash
-node --test            # ~20 с, без шага 25
-SLOW=1 node --test     # вместе с шагом 25 — ещё ~2 мин
+node --test            # ~20 s, without step 25
+SLOW=1 node --test     # including step 25 — another ~2 min
 ```

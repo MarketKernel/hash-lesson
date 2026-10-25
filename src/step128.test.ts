@@ -11,13 +11,13 @@ const powMod = (b: bigint, e: bigint): bigint => {
   return r;
 };
 
-test("step128: P — простое число в 16 байт", () => {
-  assert.equal(P.toString(16).length, 32, "16 байт = 32 hex-цифры");
-  // тест Ферма: для простого P верно a^(P−1) = 1 при любом a
-  for (const a of [2n, 3n, 5n, 7n, 11n, 13n]) assert.equal(powMod(a, P - 1n), 1n, `основание ${a}`);
+test("step128: P is a 16-byte prime", () => {
+  assert.equal(P.toString(16).length, 32, "16 bytes = 32 hex digits");
+  // Fermat test: for a prime P, a^(P−1) = 1 for every a
+  for (const a of [2n, 3n, 5n, 7n, 11n, 13n]) assert.equal(powMod(a, P - 1n), 1n, `base ${a}`);
 });
 
-test("step128: hash — те же 128 шагов, что и в цикле", () => {
+test("step128: hash is the same 128 steps as in a loop", () => {
   for (const m of [0n, 1n, 2n, 123456789n, P - 1n, P / 3n]) {
     let x = (m * m + m) % P;
     for (let i = 2; i <= 128; i++) x = (x * x + m) % P;
@@ -25,6 +25,6 @@ test("step128: hash — те же 128 шагов, что и в цикле", () =
   }
 });
 
-test("step128: invert сразу сообщает, что не досчитать", () => {
-  assert.throws(() => invert(hash(42n)), /не досчитать/);
+test("step128: invert immediately reports that it is infeasible", () => {
+  assert.throws(() => invert(hash(42n)), /infeasible/);
 });

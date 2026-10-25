@@ -1,28 +1,28 @@
-// Шаг 2: два шага x = x² + m.
+// Step 2: two steps x = x² + m.
 
 import { polynomials } from "./algebra.ts";
 
-export const P = 786433; // простое число, чуть меньше 2²⁰
+export const P = 786433; // a prime, just below 2²⁰
 
 export function hash(m: number): number {
-  let x = (m * m + m) % P; // шаг 1
-  x = (x * x + m) % P; // шаг 2
-  // То же одной строкой — подставили шаг 1 в шаг 2:
+  let x = (m * m + m) % P; // step 1
+  x = (x * x + m) % P; // step 2
+  // The same in one line — substitute step 1 into step 2:
   //   x = (((m * m + m) % P) * ((m * m + m) % P) + m) % P;
-  // Раскрыли скобки (промежуточные % P можно убрать — остаток в конце получится тот же):
+  // Expanded (the intermediate % P can be dropped — the remainder at the end comes out the same):
   //   x = (m * m * m * m + 2 * m * m * m + m * m + m) % P;
-  // Внимание: эта сумма уже при m ≥ 9742 больше 2⁵³, и обычные числа JS считают её неточно.
-  // Поэтому эта строка — для чтения; в тесте она считается через BigInt.
+  // Note: already for m ≥ 9742 this sum exceeds 2⁵³, and plain JS numbers compute it inexactly.
+  // So this line is for reading; the test computes it in BigInt.
   return x;
 }
 
-// Обратная: по h найти какое-нибудь m, у которого hash(m) = h (или null, если такого нет).
+// Inverse: given h, find some m with hash(m) = h (or null if there is none).
 //
-// Размотать назад нельзя: шаг назад x = √(h − m) требует m, а его мы и ищем.
-// Зато можно подставить шаг 1 в шаг 2 (см. раскрытые скобки выше) — получается уравнение 4-й степени
+// Unwinding backwards is impossible: the step back x = √(h − m) needs m, and that is what we're looking for.
+// But we can substitute step 1 into step 2 (see the expanded form above) — this gives an equation of degree 4
 //   m⁴ + 2m³ + m² + m − h = 0   (mod P)
-// Готовой формулы для него нет, но по модулю простого P корень многочлена любой степени
-// находит алгоритм — findRoot в algebra.ts.
+// There is no ready formula for it, but modulo a prime P a root of a polynomial of any degree
+// is found by an algorithm — findRoot in algebra.ts.
 const { findRoot } = polynomials(P);
 
 export function invert(h: number): number | null {
